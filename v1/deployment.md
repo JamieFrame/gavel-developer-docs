@@ -323,8 +323,8 @@ Replace all mock token addresses with real Arbitrum One token addresses (see [Su
 
 ```bash
 # Clone repository
-git clone https://github.com/thegavel/protocol.git
-cd protocol
+git clone https://github.com/JamieFrame/The-Gavel-Protocol.git
+cd The-Gavel-Protocol
 
 # Install dependencies
 forge install
