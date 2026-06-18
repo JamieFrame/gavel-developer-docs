@@ -112,3 +112,4 @@ This makes a borrower position mechanically similar to an option: a buyer of the
 - **Frontend guide** — building a custom interface against the protocol and the public API *(in this repo)*.
 - **Direct Access Guide** — calling the core directly, with worked flows ([protocol repo](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/direct-access-guide.md)).
 - **Deployed contracts** — addresses and verified source ([protocol repo](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/deployed-contracts.md)).
+- **Security & audit** — defensive properties and the Sherlock collaborative audit, finalised 15 April 2026: [`SECURITY.md`](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/SECURITY.md) and the [audit report](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/audit/2026-04-15-Sherlock-Collaborative-Audit.pdf) ([protocol repo](https://github.com/JamieFrame/The-Gavel-Protocol)).

@@ -1,6 +1,6 @@
 # Contract Reference
 
-A function-level reference for the deployed contracts. Read [Architecture](architecture.md) first for the model; see the protocol repo for [deployed addresses](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/deployed-contracts.md) and verified source, and the [Direct Access Guide](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/direct-access-guide.md) for worked end-to-end flows.
+A function-level reference for the deployed contracts. Read [Architecture](architecture.md) first for the model; see the protocol repo for [deployed addresses](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/deployed-contracts.md) and verified source, and the [Direct Access Guide](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/direct-access-guide.md) for worked end-to-end flows. Where this reference and the verified contract source disagree, the verified source (and its ABI) is authoritative — this page is a convenience, not the source of truth.
 
 The system is two parallel stacks. This reference documents the **ERC-20 stack** (`LoanProtocol`, `PositionNFT`, `ListingService`) in full, then describes the **NFT stack** (`NFTLoanProtocol`, `NFTPositionNFT`, `NFTListingService`) as its differences. All amounts are in token base units. Position token IDs follow `borrower = loanId × 2`, `lender = loanId × 2 + 1`.
 
