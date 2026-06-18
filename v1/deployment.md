@@ -1,446 +1,120 @@
-# Deployment and Verification
+# Deployment Guide
 
-Contract addresses, deployment procedure, and verification instructions for The Gavel Protocol.
+The Gavel Protocol is MIT-licensed and permissionless. This guide shows how to **deploy your own instance** of the contracts — for a private market, a testnet, or a fork. It is generic builder guidance; for the addresses of the canonical Arbitrum One deployment, see the protocol repo's [deployed contracts](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/deployed-contracts.md).
 
----
+## Prerequisites
 
-## Table of Contents
+- [Foundry](https://book.getfoundry.sh/) installed.
+- An RPC endpoint and a funded deployer account on your target chain.
+- The contracts from `src/` (compile with `forge build`).
 
-- [Contract Addresses](#contract-addresses)
-- [Deployment Order](#deployment-order)
-- [Deployment Scripts](#deployment-scripts)
-- [Post-Deployment Configuration](#post-deployment-configuration)
-- [Verification](#verification)
-- [Mainnet Migration](#mainnet-migration)
-- [Local Development](#local-development)
-- [Environment Setup](#environment-setup)
+## The proxy model
 
----
+Each contract is an implementation deployed behind a minimal **ERC1967 proxy**. The implementations use OpenZeppelin's upgradeable base contracts, which means they use an `initialize(...)` function instead of a constructor — but they are **not** UUPS and there is **no proxy admin**, so once deployed the logic cannot be upgraded. This is deliberate: upgrades are done by deploying a new instance ("redeploy-as-v2"), never in place. If you deploy your own instance, it inherits the same immutability.
 
-## Contract Addresses
+## Deploy order and the circular wiring
 
-### Arbitrum Sepolia (Testnet)
-
-| Contract | Address | Proxy Type |
-|----------|---------|------------|
-| LoanProtocol | `0x5B54...742e` | Transparent Proxy |
-| PositionNFT | `0x272B...90dF` | Transparent Proxy |
-| ListingService | `0x9108...836e` | Transparent Proxy |
-| NFTLoanProtocol | `0x2FB7...0Ba75` | Transparent Proxy |
-| NFTPositionNFT | `0xDCBD...0aab` | Transparent Proxy |
-| NFTListingService | `0xBAf0...9C57` | Transparent Proxy |
-
-### Arbitrum One (Mainnet)
-
-Deployment pending completion of security audit. Addresses will be published here once deployed.
-
-### Supported Tokens (Testnet)
-
-| Token | Address | Decimals |
-|-------|---------|----------|
-| WBTC (mock) | `0xE735...2110` | 8 |
-| USDC (mock) | `0xa85b...dD14` | 6 |
-| USDT (mock) | `0x04f1...0c2` | 6 |
-
-### Supported Tokens (Mainnet — Arbitrum One)
-
-| Token | Address | Decimals |
-|-------|---------|----------|
-| WBTC | `0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f` | 8 |
-| USDC (native) | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` | 6 |
-| USDT | `0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9` | 6 |
-
----
-
-## Deployment Order
-
-Contracts must be deployed in this exact order due to cross-references set during initialisation.
-
-### ERC-20 Lending Stack
+Within a stack, the core and the position NFT reference each other, and the reference is fixed at initialisation with no setter. The init signatures are:
 
 ```
-1. PositionNFT
-2. LoanProtocol          (receives PositionNFT address)
-3. Authorise LoanProtocol in PositionNFT
-4. ListingService         (receives LoanProtocol address)
-5. Whitelist tokens in ListingService
+PositionNFT.initialize(address _loanProtocol)
+LoanProtocol.initialize(address _positionNFT)
+ListingService.initialize(address _loanProtocol)
 ```
 
-### NFT Lending Stack
+(The NFT stack is analogous: `NFTPositionNFT.initialize(_loanProtocol)`, `NFTLoanProtocol.initialize(_positionNFT)`, `NFTListingService.initialize(_loanProtocol)`.)
 
-```
-1. NFTPositionNFT
-2. NFTLoanProtocol        (receives NFTPositionNFT address)
-3. Authorise NFTLoanProtocol in NFTPositionNFT
-4. NFTListingService      (receives NFTLoanProtocol address)
-5. Whitelist NFT collections in NFTListingService
-```
-
----
-
-## Deployment Scripts
-
-### Prerequisites
-
-```bash
-# Install Foundry
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
-
-# Install dependencies
-forge install
-
-# Set environment variables
-export PRIVATE_KEY=0x...
-export ARBISCAN_API_KEY=your_key
-export RPC_URL=https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY
-```
-
-### Deploy ERC-20 Stack
+Because each of the core and the position NFT needs the other's address, you resolve the cycle by deploying the position-NFT proxy first **without** initialising it, deploying the core initialised with the position-NFT address, then initialising the position NFT with the core address:
 
 ```solidity
-// script/DeployERC20.s.sol
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import "../src/PositionNFT.sol";
-import "../src/LoanProtocol.sol";
-import "../src/ListingService.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {PositionNFT}    from "../src/PositionNFT.sol";
+import {LoanProtocol}   from "../src/LoanProtocol.sol";
+import {ListingService} from "../src/ListingService.sol";
 
-contract DeployERC20 is Script {
+contract Deploy is Script {
     function run() external {
         vm.startBroadcast();
 
-        // 1. Deploy PositionNFT
-        PositionNFT positionNFTImpl = new PositionNFT();
-        TransparentUpgradeableProxy positionNFTProxy = new TransparentUpgradeableProxy(
-            address(positionNFTImpl),
-            msg.sender,  // proxy admin
-            abi.encodeCall(PositionNFT.initialize, ("Gavel Position", "GPOS"))
-        );
-        PositionNFT positionNFT = PositionNFT(address(positionNFTProxy));
+        // 1. Implementations
+        PositionNFT    posImpl  = new PositionNFT();
+        LoanProtocol   coreImpl = new LoanProtocol();
+        ListingService lsImpl   = new ListingService();
 
-        // 2. Deploy LoanProtocol
-        LoanProtocol loanProtocolImpl = new LoanProtocol();
-        TransparentUpgradeableProxy loanProtocolProxy = new TransparentUpgradeableProxy(
-            address(loanProtocolImpl),
-            msg.sender,
-            abi.encodeCall(LoanProtocol.initialize, (address(positionNFT)))
-        );
-        LoanProtocol loanProtocol = LoanProtocol(address(loanProtocolProxy));
+        // 2. PositionNFT proxy — deployed UNINITIALISED (empty init data)
+        ERC1967Proxy posProxy = new ERC1967Proxy(address(posImpl), "");
 
-        // 3. Authorise LoanProtocol in PositionNFT
-        positionNFT.setLoanProtocol(address(loanProtocol));
+        // 3. LoanProtocol proxy — initialised with the PositionNFT proxy address
+        bytes memory coreInit =
+            abi.encodeCall(LoanProtocol.initialize, (address(posProxy)));
+        ERC1967Proxy coreProxy = new ERC1967Proxy(address(coreImpl), coreInit);
 
-        // 4. Deploy ListingService
-        ListingService listingServiceImpl = new ListingService();
-        TransparentUpgradeableProxy listingServiceProxy = new TransparentUpgradeableProxy(
-            address(listingServiceImpl),
-            msg.sender,
-            abi.encodeCall(ListingService.initialize, (
-                address(loanProtocol),
-                msg.sender,  // treasury
-                0,           // auctionFeeBps (zero at launch)
-                0            // marketplaceListingFee (zero at launch)
-            ))
-        );
-        ListingService listingService = ListingService(address(listingServiceProxy));
+        // 4. Now initialise PositionNFT with the LoanProtocol proxy address
+        PositionNFT(address(posProxy)).initialize(address(coreProxy));
 
-        // 5. Whitelist tokens
-        listingService.setTokenWhitelist(WBTC_ADDRESS, true);
-        listingService.setTokenWhitelist(USDC_ADDRESS, true);
-        listingService.setTokenWhitelist(USDT_ADDRESS, true);
+        // 5. (Optional) Curation layer — initialised with the core
+        bytes memory lsInit =
+            abi.encodeCall(ListingService.initialize, (address(coreProxy)));
+        ERC1967Proxy lsProxy = new ERC1967Proxy(address(lsImpl), lsInit);
 
         vm.stopBroadcast();
-
-        // Log addresses
-        console.log("PositionNFT:", address(positionNFT));
-        console.log("LoanProtocol:", address(loanProtocol));
-        console.log("ListingService:", address(listingService));
     }
 }
 ```
 
-### Run Deployment
+Run with:
 
 ```bash
-# Testnet
-forge script script/DeployERC20.s.sol \
-  --rpc-url $RPC_URL \
-  --broadcast \
-  --verify \
-  --etherscan-api-key $ARBISCAN_API_KEY
-
-# Mainnet (add --slow for safety)
-forge script script/DeployERC20.s.sol \
-  --rpc-url https://arb1.arbitrum.io/rpc \
-  --broadcast \
-  --verify \
-  --slow \
-  --etherscan-api-key $ARBISCAN_API_KEY
+forge script script/Deploy.s.sol --rpc-url $RPC_URL --broadcast
 ```
 
----
+Always interact with the **proxy** addresses, never the implementation addresses.
 
-## Post-Deployment Configuration
+## Post-deploy configuration (curation layer)
 
-After deploying all contracts, verify the following:
+The core needs no configuration — it accepts any token immediately. The optional Curation Layer is where you define your curated set:
 
-### Checklist
+```solidity
+// Whitelist collateral and loan tokens (loan tokens require a non-zero min bid step)
+ListingService(lsProxy).setCollateralWhitelist(WBTC, true);
+ListingService(lsProxy).setLoanTokenWhitelist(USDC, true, MIN_BID_STEP);
 
-```bash
-# 1. Verify PositionNFT knows the LoanProtocol
-cast call $POSITION_NFT "loanProtocol()" --rpc-url $RPC_URL
-# Should return LoanProtocol proxy address
-
-# 2. Verify ListingService knows the LoanProtocol
-cast call $LISTING_SERVICE "loanProtocol()" --rpc-url $RPC_URL
-# Should return LoanProtocol proxy address
-
-# 3. Verify token whitelist
-cast call $LISTING_SERVICE "isTokenWhitelisted(address)" $WBTC --rpc-url $RPC_URL
-# Should return true
-
-# 4. Verify fees are zero
-cast call $LISTING_SERVICE "auctionFeeBps()" --rpc-url $RPC_URL
-# Should return 0
-
-# 5. Verify owner
-cast call $LOAN_PROTOCOL "owner()" --rpc-url $RPC_URL
-# Should return deployer address
-
-# 6. Verify protocol is not paused
-cast call $LOAN_PROTOCOL "paused()" --rpc-url $RPC_URL
-# Should return false
-
-# 7. Test pause/unpause
-cast send $LOAN_PROTOCOL "pause()" --rpc-url $RPC_URL --private-key $PRIVATE_KEY
-cast send $LOAN_PROTOCOL "unpause()" --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+// NFT stack: whitelist collections instead
+NFTListingService(nftLsProxy).setCollectionWhitelist(COLLECTION, true);
 ```
 
-### Transfer Ownership to Multi-Sig (Mainnet)
+`setLoanTokenWhitelist` reverts (`MinBidStepRequired`) if you pass a zero min bid step when whitelisting — set a meaningful floor for the token's decimals.
 
-```bash
-MULTISIG=0x...  # Gnosis Safe address
+## Ownership and decentralisation
 
-# Transfer each contract
-cast send $LOAN_PROTOCOL "transferOwnership(address)" $MULTISIG --private-key $PRIVATE_KEY
-cast send $POSITION_NFT "transferOwnership(address)" $MULTISIG --private-key $PRIVATE_KEY
-cast send $LISTING_SERVICE "transferOwnership(address)" $MULTISIG --private-key $PRIVATE_KEY
-cast send $NFT_LOAN_PROTOCOL "transferOwnership(address)" $MULTISIG --private-key $PRIVATE_KEY
-cast send $NFT_POSITION_NFT "transferOwnership(address)" $MULTISIG --private-key $PRIVATE_KEY
-cast send $NFT_LISTING_SERVICE "transferOwnership(address)" $MULTISIG --private-key $PRIVATE_KEY
+After deploy, each contract's owner is the deployer. The owner's powers are narrow: `pause`/`unpause` on the core, and whitelist/fee configuration on the curation layer. There is no upgrade power. Transfer ownership to a multisig:
+
+```solidity
+PositionNFT(posProxy).transferOwnership(SAFE);
+LoanProtocol(coreProxy).transferOwnership(SAFE);
+ListingService(lsProxy).transferOwnership(SAFE);
 ```
 
----
+`Ownable` here is one-step and irreversible — verify the target address before transferring. To fully decentralise, the owner can later renounce ownership, after which even pause is gone and only the immutable logic remains.
 
 ## Verification
 
-All contracts should be verified on Arbiscan so users can inspect the source code.
-
-### Automatic Verification (via Forge)
-
-If you used `--verify` during deployment, contracts should already be verified. Check:
-
-```
-https://sepolia.arbiscan.io/address/CONTRACT_ADDRESS#code
-```
-
-### Manual Verification
-
-If automatic verification failed:
+Verify each implementation on the block explorer so the source is publicly inspectable:
 
 ```bash
-forge verify-contract \
-  --chain-id 421614 \
-  --compiler-version v0.8.20+commit.a1b79de6 \
-  --optimizer-runs 200 \
-  --etherscan-api-key $ARBISCAN_API_KEY \
-  $IMPLEMENTATION_ADDRESS \
-  src/LoanProtocol.sol:LoanProtocol
+forge verify-contract <IMPLEMENTATION_ADDR> src/LoanProtocol.sol:LoanProtocol \
+  --chain arbitrum --watch
 ```
 
-For proxy contracts, also verify the proxy itself and link the implementation:
+Explorers will then surface the proxy as a proxy and link it to the verified implementation.
 
-```bash
-# Verify the proxy points to the correct implementation
-cast call $PROXY_ADDRESS "implementation()" --rpc-url $RPC_URL
-```
+## Notes
 
-### Verification Checklist
-
-For each of the 6 contracts, confirm:
-
-- [ ] Implementation contract source verified on Arbiscan
-- [ ] Proxy contract marked as proxy on Arbiscan
-- [ ] "Read as Proxy" tab available showing implementation functions
-- [ ] Constructor arguments match deployment parameters
-- [ ] Compiler version and optimiser settings match `foundry.toml`
-
----
-
-## Mainnet Migration
-
-When moving from testnet to mainnet, the following changes are required:
-
-### Duration Units
-
-Testnet uses **minutes** for fast iteration. Mainnet uses **days**.
-
-```javascript
-// Testnet: durations in minutes
-const loanDuration = BigInt(Math.round(parseFloat(days) * 60));
-
-// Mainnet: durations in days
-const loanDuration = BigInt(Math.round(parseFloat(days) * 86400));
-```
-
-### Network Configuration
-
-| Setting | Testnet | Mainnet |
-|---------|---------|---------|
-| Chain ID | `421614` (Arbitrum Sepolia) | `42161` (Arbitrum One) |
-| Block explorer | `https://sepolia.arbiscan.io` | `https://arbiscan.io` |
-| RPC endpoint | Sepolia RPC | Arbitrum One RPC |
-
-### Token Addresses
-
-Replace all mock token addresses with real Arbitrum One token addresses (see [Supported Tokens](#supported-tokens-mainnet--arbitrum-one) above).
-
-### Testnet-Only Features to Remove
-
-- Mock token minting functions
-- Testnet faucet integration
-- `testMintAmount` configuration
-- Any hardcoded testnet addresses
-
----
-
-## Local Development
-
-### Foundry Setup
-
-```bash
-# Clone repository
-git clone https://github.com/JamieFrame/The-Gavel-Protocol.git
-cd The-Gavel-Protocol
-
-# Install dependencies
-forge install
-
-# Build
-forge build
-
-# Run tests
-forge test
-
-# Run tests with verbose output
-forge test -vvv
-
-# Run specific test file
-forge test --match-path test/LoanProtocol.t.sol
-
-# Coverage report
-forge coverage
-
-# Gas report
-forge test --gas-report
-```
-
-### Foundry Configuration
-
-```toml
-# foundry.toml
-[profile.default]
-src = "src"
-out = "out"
-libs = ["lib"]
-solc_version = "0.8.20"
-optimizer = true
-optimizer_runs = 200
-via_ir = true
-
-[fuzz]
-runs = 10000
-
-[invariant]
-runs = 1000
-depth = 50000
-```
-
-### Local Fork Testing
-
-```bash
-# Fork Arbitrum Sepolia for testing against deployed contracts
-anvil --fork-url $RPC_URL
-
-# In another terminal, run tests against the fork
-forge test --fork-url http://localhost:8545
-```
-
----
-
-## Environment Setup
-
-### Required Environment Variables
-
-```bash
-# .env (do not commit this file)
-PRIVATE_KEY=0x...                    # Deployer private key
-ARBISCAN_API_KEY=...                 # For contract verification
-RPC_URL=https://...                  # Arbitrum RPC endpoint
-```
-
-### Dependencies
-
-| Dependency | Version | Purpose |
-|------------|---------|---------|
-| Foundry | Latest stable | Build, test, deploy |
-| OpenZeppelin Contracts | 5.x | Upgradeable contract bases |
-| OpenZeppelin Contracts Upgradeable | 5.x | Proxy and access control |
-| Node.js | 18+ | Frontend and scripts |
-
-### Project Structure
-
-```
-protocol/
-├── src/
-│   ├── LoanProtocol.sol          # Core ERC-20 lending
-│   ├── NFTLoanProtocol.sol       # Core NFT lending
-│   ├── PositionNFT.sol           # Position tokens (ERC-20 loans)
-│   ├── NFTPositionNFT.sol        # Position tokens (NFT loans)
-│   ├── ListingService.sol        # Token curation layer
-│   ├── NFTListingService.sol     # NFT curation layer
-│   └── interfaces/
-│       ├── ILoanProtocol.sol
-│       ├── INFTLoanProtocol.sol
-│       ├── IPositionNFT.sol
-│       └── INFTPositionNFT.sol
-├── test/
-│   ├── LoanProtocol.t.sol
-│   ├── NFTLoanProtocol.t.sol
-│   ├── PositionNFT.t.sol
-│   ├── ListingService.t.sol
-│   ├── NFTListingService.t.sol
-│   ├── NFTPositionNFT.t.sol
-│   ├── helpers/
-│   │   ├── TestSetup.sol
-│   │   └── NFTTestSetup.sol
-│   └── fuzz/
-│       └── handlers/
-├── script/
-│   └── Deploy.s.sol
-├── docs/
-│   ├── INTEGRATION.md
-│   ├── AUCTION_LIFECYCLE.md
-│   ├── SECURITY.md
-│   └── DEPLOYMENT.md
-├── foundry.toml
-├── README.md
-└── LICENSE
-```
-
----
-
-*This document is maintained alongside the codebase. Last updated: February 2026.*
+- **Test on a testnet first.** The position↔core linkage is permanent; a mis-wired deployment cannot be fixed in place — you would redeploy.
+- **Immutability is a feature, not an oversight.** Don't add an upgrade mechanism expecting to match the reference; the design is non-upgradeable by intent.
+- **Decimals and bid steps** are per token — choose `minBidStep` appropriately (e.g. a 6-decimal stablecoin and an 18-decimal token need different floors).
+- For the canonical addresses and verified source, see the [protocol repo](https://github.com/JamieFrame/The-Gavel-Protocol).

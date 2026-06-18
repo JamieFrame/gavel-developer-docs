@@ -1,529 +1,234 @@
 # Integration Guide
 
-How to interact with The Gavel Protocol smart contracts programmatically.
+This guide shows how to integrate with The Gavel Protocol in code: the common flows (borrow, lend, trade a position), the operator pattern that lets you build on top without taking custody, and how to read state and handle errors. Read [Architecture](architecture.md) for the model and [Contract Reference](contracts-reference.md) for exact signatures.
+
+Examples use **ethers v6**; the same calls work with viem or any other library. Addresses are in the protocol repo's [deployed contracts](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/deployed-contracts.md); ABIs come from the verified source on Arbiscan or by compiling the contracts in `src/`.
+
+## Setup
+
+```js
+import { ethers } from "ethers";
+
+const provider = new ethers.JsonRpcProvider(ARBITRUM_RPC_URL);
+const signer   = new ethers.Wallet(PRIVATE_KEY, provider);
+
+const loanProtocol = new ethers.Contract(LOAN_PROTOCOL_ADDR, LOAN_PROTOCOL_ABI, signer);
+const positionNFT  = new ethers.Contract(POSITION_NFT_ADDR,  POSITION_NFT_ABI,  signer);
+const usdc         = new ethers.Contract(USDC_ADDR, ERC20_ABI, signer);
+```
+
+A note on decimals: amounts are token base units. USDC and USDT use 6 decimals, WBTC uses 8, most ERC-20s use 18. Use `ethers.parseUnits("100", 6)` for 100 USDC.
+
+Every flow that moves a token starts with an ERC-20 `approve` to the core contract.
 
 ---
 
-## Table of Contents
+## Flow 1 — Borrow (direct)
 
-- [Overview](#overview)
-- [Contract ABIs](#contract-abis)
-- [Collateral Management](#collateral-management)
-- [Auction Lifecycle](#auction-lifecycle)
-- [Loan Management](#loan-management)
-- [Position Marketplace](#position-marketplace)
-- [NFT Lending](#nft-lending)
-- [View Functions and Queries](#view-functions-and-queries)
-- [Events](#events)
-- [Common Patterns](#common-patterns)
-- [Error Reference](#error-reference)
+```js
+// 1. Approve and deposit collateral (e.g. 0.5 WBTC, 8 decimals)
+const collateralAmount = ethers.parseUnits("0.5", 8);
+await (await wbtc.approve(loanProtocol.target, collateralAmount)).wait();
+await (await loanProtocol.depositCollateral(WBTC_ADDR, collateralAmount)).wait();
 
----
-
-## Overview
-
-The Gavel Protocol can be accessed in two ways:
-
-1. **Direct protocol access** — Call `LoanProtocol` or `NFTLoanProtocol` directly. Fully permissionless, no whitelisting required.
-2. **Via ListingService** — Uses curated token whitelists for safety. Requires the user to grant operator approval to the ListingService contract.
-
-Most integrators should interact with the core protocol directly. The ListingService adds curation but is not required.
-
-### Dependencies
-
-```bash
-# ethers.js v6
-npm install ethers
-
-# or ethers.js v5
-npm install ethers@5
-```
-
-### Connection Setup
-
-```javascript
-import { ethers } from 'ethers';
-
-// Connect to Arbitrum
-const provider = new ethers.JsonRpcProvider('https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY');
-const signer = new ethers.Wallet(PRIVATE_KEY, provider);
-
-// Contract instances
-const loanProtocol = new ethers.Contract(LOAN_PROTOCOL_ADDRESS, LOAN_PROTOCOL_ABI, signer);
-const positionNFT = new ethers.Contract(POSITION_NFT_ADDRESS, POSITION_NFT_ABI, signer);
-```
-
----
-
-## Contract ABIs
-
-### LoanProtocol (Core Functions)
-
-```javascript
-const LOAN_PROTOCOL_ABI = [
-  // Collateral
-  "function depositCollateral(address token, uint256 amount) external",
-  "function withdrawCollateral(address token, uint256 amount) external",
-  "function collateralBalances(address user, address token) external view returns (uint256)",
-
-  // Auctions
-  "function createAuction(address collateralToken, uint256 collateralAmount, address loanToken, uint256 loanAmount, uint256 maxRepayment, uint256 loanDuration, uint256 auctionDuration, uint256 bidStep) external returns (uint256)",
-  "function placeBid(uint256 auctionId, uint256 repaymentAmount) external",
-  "function finalizeAuction(uint256 auctionId) external",
-  "function cancelAuction(uint256 auctionId) external",
-  "function claimExpiredAuction(uint256 auctionId) external",
-  "function claimRefund(address token) external",
-
-  // Loans
-  "function repayLoan(uint256 loanId) external",
-  "function claimCollateral(uint256 loanId) external",
-
-  // Marketplace
-  "function listPosition(uint256 loanId, string positionType, address paymentToken, uint256 askingPrice) external",
-  "function unlistPosition(uint256 loanId) external",
-  "function buyPosition(uint256 loanId) external",
-  "function makeMarketplaceOffer(uint256 loanId, uint256 offerAmount, uint256 offerDuration) external returns (uint256)",
-  "function acceptMarketplaceOffer(uint256 loanId, uint256 offerId) external",
-  "function cancelMarketplaceOffer(uint256 loanId, uint256 offerId) external",
-  "function rejectMarketplaceOffer(uint256 loanId, uint256 offerId) external",
-  "function counterMarketplaceOffer(uint256 loanId, uint256 offerId, uint256 counterAmount, uint256 counterDuration) external",
-  "function acceptMarketplaceCounterOffer(uint256 loanId, uint256 offerId) external",
-  "function expireMarketplaceOffer(uint256 loanId, uint256 offerId) external",
-
-  // View
-  "function getAuction(uint256 auctionId) external view returns (tuple)",
-  "function getLoan(uint256 loanId) external view returns (tuple)",
-  "function pendingRefunds(address user, address token) external view returns (uint256)",
-  "function loanNonce() external view returns (uint256)",
-
-  // Operator
-  "function setOperatorApproval(address operator, bool approved) external",
-  "function operatorApprovals(address owner, address operator) external view returns (bool)",
-];
-```
-
-### PositionNFT
-
-```javascript
-const POSITION_NFT_ABI = [
-  "function getBorrowerTokenId(uint256 loanId) external view returns (uint256)",
-  "function getLenderTokenId(uint256 loanId) external view returns (uint256)",
-  "function ownerOf(uint256 tokenId) external view returns (address)",
-  "function approve(address to, uint256 tokenId) external",
-  "function setApprovalForAll(address operator, bool approved) external",
-  "function isApprovedForAll(address owner, address operator) external view returns (bool)",
-];
-```
-
----
-
-## Collateral Management
-
-Before creating an auction, the borrower must deposit collateral into the protocol.
-
-### Step 1: Approve Token Transfer
-
-```javascript
-const wbtc = new ethers.Contract(WBTC_ADDRESS, ERC20_ABI, signer);
-
-// Approve the LoanProtocol to spend your WBTC
-const amount = ethers.parseUnits('0.5', 8); // 0.5 WBTC (8 decimals)
-await wbtc.approve(LOAN_PROTOCOL_ADDRESS, amount);
-```
-
-### Step 2: Deposit
-
-```javascript
-await loanProtocol.depositCollateral(WBTC_ADDRESS, amount);
-```
-
-### Step 3: Check Balance
-
-```javascript
-const balance = await loanProtocol.collateralBalances(signer.address, WBTC_ADDRESS);
-console.log('Deposited WBTC:', ethers.formatUnits(balance, 8));
-```
-
-### Withdraw Unused Collateral
-
-```javascript
-// Only withdraws collateral not locked in active auctions/loans
-await loanProtocol.withdrawCollateral(WBTC_ADDRESS, amount);
-```
-
----
-
-## Auction Lifecycle
-
-### Create an Auction (Borrower)
-
-```javascript
+// 2. Open an auction: borrow 10,000 USDC, repay at most 10,500, 90-day term, 24h auction
 const tx = await loanProtocol.createAuction(
-  WBTC_ADDRESS,                          // collateralToken
-  ethers.parseUnits('0.5', 8),           // collateralAmount (0.5 WBTC)
-  USDC_ADDRESS,                          // loanToken
-  ethers.parseUnits('10000', 6),         // loanAmount (10,000 USDC)
-  ethers.parseUnits('10500', 6),         // maxRepayment (10,500 USDC = 5% cap)
-  30 * 86400,                            // loanDuration (30 days in seconds)
-  24 * 3600,                             // auctionDuration (24 hours)
-  ethers.parseUnits('10', 6)             // bidStep (minimum $10 improvement)
+  WBTC_ADDR, collateralAmount,
+  USDC_ADDR, ethers.parseUnits("10000", 6),
+  ethers.parseUnits("10500", 6),     // maxRepayment (interest cap)
+  90n * 24n * 60n * 60n,             // loanDuration (seconds)
+  24n * 60n * 60n,                   // auctionDuration (seconds)
+  0n                                 // bidStep: 0 = protocol default
 );
-
 const receipt = await tx.wait();
-// Parse AuctionCreated event to get auctionId
+
+// 3. Recover the auctionId from the AuctionCreated event
+const ev = receipt.logs
+  .map(l => { try { return loanProtocol.interface.parseLog(l); } catch { return null; } })
+  .find(p => p && p.name === "AuctionCreated");
+const auctionId = ev.args.auctionId;
 ```
 
-### Parameters Explained
+Once the auction ends, anyone can finalise it (finalisation is permissionless — your UI, a keeper, or the winning lender can call it):
 
-| Parameter | Description | Constraints |
-|-----------|-------------|-------------|
-| `collateralToken` | ERC-20 token used as collateral | Must have deposited balance |
-| `collateralAmount` | Amount of collateral to lock | ≤ your deposited balance |
-| `loanToken` | Token you want to borrow (e.g., USDC) | Different from collateral |
-| `loanAmount` | Principal amount to borrow | > 0 |
-| `maxRepayment` | Maximum you'll repay (caps rate) | > loanAmount |
-| `loanDuration` | How long you have to repay (seconds) | Protocol min/max apply |
-| `auctionDuration` | How long bidding is open (seconds) | Protocol min/max apply |
-| `bidStep` | Minimum bid improvement | 0 = protocol default |
-
-### Place a Bid (Lender)
-
-Lenders bid by offering a lower repayment amount. Their `loanAmount` in USDC is escrowed when they bid.
-
-```javascript
-const usdc = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, signer);
-
-// Step 1: Approve USDC for the loan amount (not the bid amount)
-const loanAmount = ethers.parseUnits('10000', 6);
-await usdc.approve(LOAN_PROTOCOL_ADDRESS, loanAmount);
-
-// Step 2: Place bid with desired repayment
-const myBid = ethers.parseUnits('10200', 6); // Offering 2% rate
-await loanProtocol.placeBid(auctionId, myBid);
-```
-
-**Important:** The USDC approval and transfer is for the `loanAmount`, not your bid. If you win, the full loan amount goes to the borrower. If you're outbid, your funds are queued for refund.
-
-### Claim Refund (Outbid Lender)
-
-```javascript
-// Check pending refund
-const refund = await loanProtocol.pendingRefunds(signer.address, USDC_ADDRESS);
-
-if (refund > 0n) {
-  await loanProtocol.claimRefund(USDC_ADDRESS);
+```js
+if (await loanProtocol.canFinalize(auctionId)) {
+  await (await loanProtocol.finalizeAuction(auctionId)).wait();
 }
 ```
 
-### Finalize Auction
+Finalisation creates the loan and mints the position NFTs. The `loanId` equals the `auctionId` for that auction. To repay:
 
-Anyone can finalize an auction after the bidding period ends. This creates the loan.
-
-```javascript
-await loanProtocol.finalizeAuction(auctionId);
-```
-
-If no bids were placed, finalization cancels the auction and returns collateral.
-
-### Cancel Auction
-
-Borrowers can cancel their auction before any bids are placed.
-
-```javascript
-await loanProtocol.cancelAuction(auctionId);
-```
-
-### Claim Expired Auction
-
-If an auction isn't finalized within the finalization window (7 days after end), participants can reclaim their assets.
-
-```javascript
-await loanProtocol.claimExpiredAuction(auctionId);
-```
-
----
-
-## Loan Management
-
-### Repay Loan (Borrower)
-
-The borrower (or whoever holds the borrower Position NFT) repays to reclaim collateral.
-
-```javascript
-// Step 1: Approve repayment amount
+```js
 const loan = await loanProtocol.getLoan(loanId);
-await usdc.approve(LOAN_PROTOCOL_ADDRESS, loan.repaymentAmount);
-
-// Step 2: Repay
-await loanProtocol.repayLoan(loanId);
-// Collateral is released to borrower, repayment goes to lender
-```
-
-### Claim Collateral (Lender — on Default)
-
-If the borrower doesn't repay by maturity + grace period, the lender claims the collateral.
-
-```javascript
-await loanProtocol.claimCollateral(loanId);
+await (await usdc.approve(loanProtocol.target, loan.repaymentAmount)).wait();
+await (await loanProtocol.repayLoan(loanId)).wait(); // returns your collateral
 ```
 
 ---
 
-## Position Marketplace
+## Flow 2 — Lend (bid on an auction)
 
-When a loan is created, both borrower and lender receive Position NFTs. These are tradeable on the integrated marketplace.
-
-### List a Position
-
-```javascript
-await loanProtocol.listPosition(
-  loanId,
-  'lender',                              // or 'borrower'
-  USDC_ADDRESS,                          // payment token
-  ethers.parseUnits('9800', 6)           // asking price
-);
-```
-
-### Buy a Listed Position
-
-```javascript
-// Approve payment
-await usdc.approve(LOAN_PROTOCOL_ADDRESS, askingPrice);
-
-// Buy
-await loanProtocol.buyPosition(loanId);
-```
-
-### Make an Offer
-
-```javascript
-// Approve offer amount
-await usdc.approve(LOAN_PROTOCOL_ADDRESS, offerAmount);
-
-await loanProtocol.makeMarketplaceOffer(
-  loanId,
-  ethers.parseUnits('9500', 6),          // offer amount
-  7 * 86400                              // offer valid for 7 days
-);
-```
-
-### Offer Negotiation Flow
-
-```
-Buyer makes offer → Seller accepts / rejects / counters
-                  → If countered → Buyer accepts counter / lets it expire
-```
-
-```javascript
-// Seller accepts
-await loanProtocol.acceptMarketplaceOffer(loanId, offerId);
-
-// Seller counters
-await loanProtocol.counterMarketplaceOffer(loanId, offerId, counterAmount, counterDuration);
-
-// Buyer accepts counter
-await loanProtocol.acceptMarketplaceCounterOffer(loanId, offerId);
-
-// Anyone can expire a timed-out offer
-await loanProtocol.expireMarketplaceOffer(loanId, offerId);
-```
-
----
-
-## NFT Lending
-
-`NFTLoanProtocol` mirrors the ERC-20 protocol but uses NFTs as collateral.
-
-```javascript
-// Approve NFT transfer
-const nft = new ethers.Contract(NFT_ADDRESS, ERC721_ABI, signer);
-await nft.approve(NFT_LOAN_PROTOCOL_ADDRESS, tokenId);
-
-// Create auction
-await nftLoanProtocol.createAuction(
-  NFT_ADDRESS,                           // collateral NFT contract
-  tokenId,                               // NFT token ID
-  USDC_ADDRESS,                          // loan token
-  ethers.parseUnits('5000', 6),          // loan amount
-  ethers.parseUnits('5250', 6),          // max repayment
-  30 * 86400,                            // loan duration
-  24 * 3600,                             // auction duration
-  ethers.parseUnits('5', 6)              // bid step
-);
-```
-
-Bidding, finalization, repayment, and marketplace functions work identically to the ERC-20 protocol.
-
----
-
-## View Functions and Queries
-
-### Read Auction State
-
-```javascript
+```js
 const auction = await loanProtocol.getAuction(auctionId);
 
-console.log({
-  borrower: auction.borrower,
-  collateralToken: auction.collateralToken,
-  collateralAmount: auction.collateralAmount,
-  loanToken: auction.loanToken,
-  loanAmount: auction.loanAmount,
-  maxRepayment: auction.maxRepayment,
-  currentBid: auction.currentBid,
-  currentBidder: auction.currentBidder,
-  bidCount: auction.bidCount,
-  auctionEnd: auction.auctionEnd,          // unix timestamp
-  loanDuration: auction.loanDuration,      // seconds
-  status: auction.status,                  // 0=OPEN, 1=FINALIZED, 2=CANCELLED
-});
+// Approve the loan token for the principal you'd fund
+await (await usdc.approve(loanProtocol.target, auction.loanAmount)).wait();
+
+// Bid the total repayment you require. Lower beats the current bid.
+// Stay within the valid range:
+const maxBid = await loanProtocol.getMaximumBid(auctionId);
+const minBid = await loanProtocol.getMinimumBid(auctionId);
+const myBid  = minBid; // most competitive
+
+await (await loanProtocol.placeBid(auctionId, myBid)).wait();
 ```
 
-### Read Loan State
+If you're outbid, your deposit is held for pull-based refund:
 
-```javascript
-const loan = await loanProtocol.getLoan(loanId);
-
-console.log({
-  borrower: loan.borrower,
-  lender: loan.lender,
-  collateralToken: loan.collateralToken,
-  collateralAmount: loan.collateralAmount,
-  loanToken: loan.loanToken,
-  loanAmount: loan.loanAmount,
-  repaymentAmount: loan.repaymentAmount,
-  maturityTimestamp: loan.maturityTimestamp,
-  status: loan.status,                     // 0=ACTIVE, 1=REPAID, 2=DEFAULTED
-});
+```js
+const owed = await loanProtocol.getPendingRefund(myAddress, USDC_ADDR);
+if (owed > 0n) await (await loanProtocol.claimRefund(USDC_ADDR)).wait();
 ```
 
-### Calculate Implied Rate
+If you win, finalisation funds the loan and you hold the lender position NFT. At maturity you receive the repayment. If the borrower defaults, claim the collateral after the grace period:
 
-```javascript
-function calcImpliedRate(loanAmount, repaymentAmount, durationSeconds) {
-  const principal = parseFloat(loanAmount);
-  const repayment = parseFloat(repaymentAmount);
-  const interest = repayment - principal;
-  const durationYears = durationSeconds / (365.25 * 86400);
-  return (interest / principal / durationYears) * 100; // APR %
-}
-```
-
-### Enumerate All Auctions and Loans
-
-```javascript
-const totalLoans = await loanProtocol.loanNonce();
-
-for (let i = 1; i <= totalLoans; i++) {
-  const auction = await loanProtocol.getAuction(i);
-  const loan = await loanProtocol.getLoan(i);
-  // Process...
+```js
+if (await loanProtocol.canClaimCollateral(loanId)) {
+  await (await loanProtocol.claimCollateral(loanId)).wait();
 }
 ```
 
 ---
 
-## Events
+## Flow 3 — Trade a position
 
-### Core Events
+Derive the token ID from the loan ID and the side:
 
-```solidity
-event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
-event CollateralWithdrawn(address indexed user, address indexed token, uint256 amount);
-event AuctionCreated(uint256 indexed auctionId, address indexed borrower, ...);
-event BidPlaced(uint256 indexed auctionId, address indexed bidder, uint256 repaymentAmount, uint256 bidCount);
-event AuctionFinalized(uint256 indexed auctionId, address indexed lender, uint256 repaymentAmount);
-event AuctionCancelled(uint256 indexed auctionId);
-event AuctionExpiredNoBids(uint256 indexed auctionId);
-event LoanRepaid(uint256 indexed loanId);
-event CollateralClaimed(uint256 indexed loanId);
-event RefundQueued(address indexed user, address indexed token, uint256 amount);
-event RefundClaimed(address indexed user, address indexed token, uint256 amount);
+```js
+const lenderTokenId   = await positionNFT.getLenderTokenId(loanId);   // loanId*2 + 1
+const borrowerTokenId = await positionNFT.getBorrowerTokenId(loanId); // loanId*2
+
+// List the lender position for 9,800 USDC
+await (await loanProtocol.listPosition(
+  loanId, "lender", USDC_ADDR,
+  ethers.parseUnits("9800", 6),  // askingPrice
+  0n                             // minOfferAmount (0 = no floor)
+)).wait();
 ```
 
-### Marketplace Events
+Buying is MEV-protected — pass the maximum you'll pay and the expected payment token, and approve first:
 
-```solidity
-event PositionListed(uint256 indexed loanId, address indexed seller, string positionType, uint256 askingPrice);
-event PositionUnlisted(uint256 indexed loanId);
-event PositionSold(uint256 indexed loanId, address indexed buyer, uint256 price);
-event MarketplaceOfferMade(uint256 indexed loanId, uint256 offerId, address indexed buyer, uint256 amount);
-event MarketplaceOfferAccepted(uint256 indexed loanId, uint256 offerId);
-event MarketplaceOfferRejected(uint256 indexed loanId, uint256 offerId);
-event MarketplaceOfferCancelled(uint256 indexed loanId, uint256 offerId);
-event MarketplaceOfferExpired(uint256 indexed loanId, uint256 offerId);
-event MarketplaceCounterOffer(uint256 indexed loanId, uint256 offerId, uint256 counterAmount);
-event MarketplaceCounterAccepted(uint256 indexed loanId, uint256 offerId);
+```js
+const listing = await loanProtocol.getMarketplaceListing(lenderTokenId);
+await (await usdc.approve(loanProtocol.target, listing.askingPrice)).wait();
+await (await loanProtocol.buyPosition(
+  lenderTokenId,
+  listing.askingPrice,  // maxPrice — reverts if the listing moved up
+  USDC_ADDR             // expectedPaymentToken — reverts if it changed
+)).wait();
 ```
+
+Or negotiate with an offer (`makeMarketplaceOffer` → seller `accept`/`counter`, buyer `acceptMarketplaceCounterOffer`). Note marketplace operations freeze in the `MATURITY_BUFFER` window before maturity — a `MarketplaceFrozen` revert near maturity is expected.
 
 ---
 
-## Common Patterns
+## The operator pattern (building on top)
 
-### Listening for Auctions (Indexer / Bot)
+This is how you build products on the protocol without ever holding user assets. A user grants your contract operator rights once; your contract then acts for them through the `…For` functions, while custody stays in the core.
 
-```javascript
-loanProtocol.on('AuctionCreated', (auctionId, borrower, ...args) => {
-  console.log(`New auction #${auctionId} by ${borrower}`);
-  // Evaluate and bid if attractive
-});
-
-loanProtocol.on('BidPlaced', (auctionId, bidder, repaymentAmount, bidCount) => {
-  console.log(`Auction #${auctionId}: new bid at ${repaymentAmount} (${bidCount} bids)`);
-});
+```js
+// User approves your contract as an operator (one-time)
+await (await loanProtocol.setOperatorApproval(YOUR_ROUTER_ADDR, true)).wait();
 ```
 
-### Multi-Step Flows with Error Handling
+Your router/curation/strategy contract then calls the `…For` variant:
 
-```javascript
-async function createFullAuction(params) {
-  try {
-    // 1. Approve collateral
-    const approveTx = await token.approve(LOAN_PROTOCOL_ADDRESS, params.collateralAmount);
-    await approveTx.wait();
-
-    // 2. Deposit
-    const depositTx = await loanProtocol.depositCollateral(params.collateralToken, params.collateralAmount);
-    await depositTx.wait();
-
-    // 3. Create auction
-    const auctionTx = await loanProtocol.createAuction(
-      params.collateralToken, params.collateralAmount,
-      params.loanToken, params.loanAmount,
-      params.maxRepayment, params.loanDuration,
-      params.auctionDuration, params.bidStep
+```solidity
+// Inside YourRouter.sol — create an auction for an approved user
+function route(
+    address user,
+    address collateralToken, uint256 collateralAmount,
+    address loanToken, uint256 loanAmount, uint256 maxRepayment,
+    uint256 loanDuration, uint256 auctionDuration, uint256 bidStep
+) external returns (uint256 auctionId) {
+    // ... your own logic: whitelist checks, fees, accounting ...
+    // The core verifies that address(this) is an approved operator of `user`.
+    auctionId = loanProtocol.createAuctionFor(
+        user,            // borrower
+        user,            // collateralFrom
+        collateralToken, collateralAmount,
+        loanToken, loanAmount, maxRepayment,
+        loanDuration, auctionDuration, bidStep
     );
-    const receipt = await auctionTx.wait();
-
-    // 4. Parse auction ID from event
-    const event = receipt.logs.find(l => l.fragment?.name === 'AuctionCreated');
-    return event.args.auctionId;
-  } catch (err) {
-    console.error('Auction creation failed:', err.reason || err.message);
-    throw err;
-  }
 }
+```
+
+The core enforces the authorisation: `createAuctionFor` reverts with `Unauthorized` unless `msg.sender` is the user or an approved operator of `collateralFrom`. The same pattern applies to `listPositionFor`. This is exactly how the reference `ListingService` works — and exactly how you can build your own curation layer or router. See [Build Your Own Curation Layer](build-your-own-curation-layer.md).
+
+### Using the reference Curation Layer
+
+If instead of building your own you want to route through the reference `ListingService` (the vetted-token path the hosted interface uses), the user approves it as an operator and calls `createListedAuction`:
+
+```js
+await (await loanProtocol.setOperatorApproval(LISTING_SERVICE_ADDR, true)).wait();
+await (await listingService.createListedAuction(/* same params as createAuction */)).wait();
+// reverts with TokenNotWhitelisted if a token isn't in the curated set
 ```
 
 ---
 
-## Error Reference
+## Reading state and indexing
 
-| Error | Cause |
-|-------|-------|
-| `ZeroAddress` | Passed address(0) where a valid address is required |
-| `ZeroAmount` | Passed 0 for an amount that must be positive |
-| `InvalidToken` | Token address not whitelisted (ListingService only) |
-| `InsufficientBalance` | Trying to use more collateral than deposited |
-| `AuctionNotOpen` | Auction has already been finalized or cancelled |
-| `AuctionNotEnded` | Trying to finalize before auction end time |
-| `AuctionEnded` | Trying to bid after auction end time |
-| `SelfBidNotAllowed` | Borrower cannot bid on their own auction |
-| `BidTooHigh` | Bid must be lower than current best bid by at least bidStep |
-| `BidBelowLoanAmount` | Bid cannot be less than the loan principal (no negative interest) |
-| `UnauthorizedOperator` | Caller is not the owner or an approved operator |
-| `LoanNotActive` | Loan has already been repaid or defaulted |
-| `LoanNotExpired` | Cannot claim collateral before maturity + grace period |
-| `NotPositionOwner` | Caller doesn't hold the required Position NFT |
-| `MaxOffersReached` | Listing has reached 50 offers (MAX_OFFERS_PER_LISTING) |
-| `NoRefundAvailable` | No pending refund for this user/token pair |
+For UIs, poll the view functions (`getAuction`, `getLoan`, `getCurrentBid`, `getAuctionTimeRemaining`, `canFinalize`, `canClaimCollateral`, `isPositionListed`, …). For an index or subgraph, watch the events:
+
+- Auctions: `AuctionCreated`, `BidPlaced`, `AuctionFinalized`, `AuctionCancelled`, `AuctionExpiredNoBids`, `AuctionExpiredNotFinalized`.
+- Loans: `LoanRepaid`, `LoanDefaulted`, `LoanDefaultMarked`.
+- Positions/marketplace: `PositionListed`, `PositionSold`, `MarketplaceOfferMade`, `MarketplaceOfferAccepted`, `BorrowerPositionTransferred`, `LenderPositionTransferred`.
+
+```js
+loanProtocol.on(loanProtocol.filters.AuctionCreated(), (auctionId, /* ... */ ) => {
+  // index the new auction
+});
+```
+
+For market-wide data (yield curve, credit-surface indicators) you don't need to build your own indexer — see the [Aletheia API](../data/aletheia-api.md) and [on-chain data access](../data/on-chain-data.md).
+
+---
+
+## Error handling
+
+The contracts revert with typed custom errors (listed in the [Contract Reference](contracts-reference.md)). Decode them from the revert data:
+
+```js
+try {
+  await loanProtocol.placeBid(auctionId, myBid);
+} catch (e) {
+  const decoded = loanProtocol.interface.parseError(e.data ?? e.error?.data);
+  // decoded.name e.g. "BidTooHigh", "AuctionEnded"
+}
+```
+
+Common reverts to expect:
+
+- `TokenNotWhitelisted` — using `ListingService` with a non-curated token (the direct core path has no whitelist).
+- `BidTooHigh` / `BidTooLow` / `BidStepTooHigh` — bid outside the current valid range; read `getMinimumBid`/`getMaximumBid` first.
+- `PriceExceedsMaximum` / `PaymentTokenMismatch` — your `buyPosition` MEV guards fired because the listing changed.
+- `MarketplaceFrozen` — within the maturity buffer; marketplace ops are paused for that loan.
+- `Unauthorized` — calling a `…For` function without operator approval.
+- `GracePeriodNotEnded` / `LoanNotMatured` — claiming collateral too early.
+
+## Practical notes
+
+- **Decimals** differ per token; never hardcode 18.
+- **`bidStep = 0`** uses the protocol default; pass a value only to widen the step.
+- **Finalisation is permissionless** — don't rely on a counterparty to finalise; your integration can call `finalizeAuction` itself.
+- **Refunds are pull-based** — outbid lenders must call `claimRefund`; it isn't pushed.
+- **`loanId == auctionId`** for the loan created from that auction.
+- **Immutability** — these addresses and behaviours won't change; new versions ship at new addresses.
+
+## Next
+
+- [Build Your Own Curation Layer](build-your-own-curation-layer.md) — an independent whitelist/router on the operator model.
+- [Frontend Guide](frontend.md) — building a UI against the protocol and the public API.
+- [Direct Access Guide](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/direct-access-guide.md) — the no-code path via Arbiscan.
