@@ -47,6 +47,19 @@ The API is currently **public and open** — no API key is required to call it. 
 | `GET /analytics/daily` | Daily analytics series. |
 | `GET /protocol-state` | Current protocol state summary. |
 
+### Marketplace (secondary market)
+
+Current-state listings and the full event log for borrower/lender position resales, indexed directly from on-chain marketplace events. Read-only.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /marketplace/listings` | Current-state listings. Optional filters: `status` (`LISTED`/`UNLISTED`/`SOLD`), `loan_id`, `token_id`, `position_type` (`borrower`/`lender`), `relisted` (`true`/`false`). Pagination: `limit` (default 50, max 200), `offset`. |
+| `GET /marketplace/history` | Event log for a position. **One of `loan_id` or `token_id` is required.** Optional: `event_type`, `as_of` (a block number or ISO date — replays the log up to and including that point). Pagination: `limit` (default 100, max 500), `offset`. Events are returned in `(block_number, log_index)` order. |
+
+Prices are returned both raw (on-chain base units, as a string — `asking_price`, `sale_price`, `price`) and pre-formatted (`asking_price_formatted`, etc.) using the payment token's decimals, alongside `payment_token_symbol` and `payment_token_decimals`.
+
+> **Mainnet note.** The secondary marketplace is new on mainnet, so mainnet listings/history are currently **sparse** — these endpoints return well-formed empty results (`200` with empty arrays) there until activity accrues. The testnet base URL has live data.
+
 ### Prices and market context
 
 | Endpoint | Returns |
@@ -91,6 +104,12 @@ curl "https://api.thegavel.io/v1/rates/latest?reference=gavel&tenor=3m"
 
 # Batched credit-complex indicators
 curl "https://api.thegavel.io/v1/credit-complex"
+
+# Current marketplace listings for one loan
+curl "https://api.thegavel.io/v1/marketplace/listings?loan_id=308"
+
+# Replay a position's marketplace event log as of a given block
+curl "https://api.thegavel.io/v1/marketplace/history?token_id=617&as_of=282399131"
 ```
 
 Each returns a JSON document; shape varies by endpoint. Handle non-2xx responses by reading `error.code` and `error.message` from the body.
