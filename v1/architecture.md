@@ -55,7 +55,7 @@ The heart of the system. A single core contract per stack owns the whole lifecyc
 
 ### Position Layer — `PositionNFT` / `NFTPositionNFT`
 
-Every loan has two sides, and each side is an ERC-721. When a loan is created, the core mints a **borrower position** and a **lender position**. These NFTs *are* the positions: holding the lender NFT is what entitles you to repayment; holding the borrower NFT is what entitles you to reclaim collateral on repayment. Because they're standard ERC-721s, positions can be transferred and sold. Only the core protocol can mint, burn, or perform protocol transfers on them — the link to the core is fixed at initialisation and cannot be changed.
+Every loan has two sides, and each side is an ERC-721. When a loan is created, the core mints a **borrower position** and a **lender position**. These NFTs *are* the positions: holding the lender NFT is what entitles you to repayment; holding the borrower NFT is what entitles you to reclaim collateral on repayment. The repayment is sent to the lender NFT's current holder in the same transaction, so a loan token that refuses to pay that holder blocks the repayment (on USDC: [KI-3](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-3--repayment-reverts-if-the-loan-token-refuses-transfers-to-the-lender-position-holder)). Because they're standard ERC-721s, positions can be transferred and sold. Only the core protocol can mint, burn, or perform protocol transfers on them — the link to the core is fixed at initialisation and cannot be changed.
 
 The token-ID scheme is deterministic: for a given `loanId`, the **borrower** position is `tokenId = loanId × 2` and the **lender** position is `tokenId = loanId × 2 + 1`.
 
@@ -89,7 +89,7 @@ A borrower opens an auction stating the collateral they're posting, the token an
      └──no bids, window passes──► expired
 ```
 
-On finalisation the core mints the borrower and lender position NFTs. Repayment by the borrower returns the collateral and closes the loan. If the loan is not repaid by maturity, then after a fixed **grace period** the lender may claim the collateral. The grace period is a compile-time constant — it is not an administrative parameter.
+On finalisation the core mints the borrower and lender position NFTs. Repayment by the borrower returns the collateral and closes the loan. On a USDC loan, repayment reverts while USDC refuses the transfer to the lender-position holder or is paused, and the loan then defaults like any unrepaid loan ([KI-3](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-3--repayment-reverts-if-the-loan-token-refuses-transfers-to-the-lender-position-holder)). If the loan is not repaid by maturity, then after a fixed **grace period** the lender may claim the collateral. The grace period is a compile-time constant — it is not an administrative parameter.
 
 ## Secondary market
 

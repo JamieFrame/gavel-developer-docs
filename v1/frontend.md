@@ -76,7 +76,7 @@ From there the borrow/lend/trade flows are exactly as documented in the integrat
 
 ## Curation is your frontend's choice
 
-A frontend decides which tokens, collections, and auctions it surfaces — that *is* curation. You can present only a vetted set (e.g. WBTC collateral, USDC/USDT loans) by filtering what you show and constructing transactions with sensible parameters, while the underlying contracts remain open to anything. On v1 you can also route through the reference `ListingService` for its on-chain whitelist; in v2 curation is purely this frontend-level concern (see the [v2 Roadmap](../vision/v2-roadmap.md)). Either way, your curation is a recommendation in your UI, not a restriction on the protocol.
+A frontend decides which tokens, collections, and auctions it surfaces — that *is* curation. You can present only a vetted set (e.g. WBTC collateral, USDC/USDT loans) by filtering what you show and constructing transactions with sensible parameters, while the underlying contracts remain open to anything. On v1 you can also route through the reference `ListingService` for its on-chain whitelist; in v2 curation is purely this frontend-level concern (see the [v2 Roadmap](../vision/v2-roadmap.md)). Either way, your curation is a recommendation in your UI, not a restriction on the protocol. If you surface USDC as a loan token, note [KI-3](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-3--repayment-reverts-if-the-loan-token-refuses-transfers-to-the-lender-position-holder): on a USDC loan, a lender-position holder blocked by USDC prevents repayment; USD₮0 does not refuse transfers to a blocked recipient.
 
 ## Live updates
 

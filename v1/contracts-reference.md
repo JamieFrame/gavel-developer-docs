@@ -46,7 +46,7 @@ The core contract: collateral custody, auctions, the loan lifecycle, and the pos
 | `claimRefund(address token)` | Pull-based refund of outbid deposits. |
 | `finalizeAuction(uint256 auctionId)` | Finalise an ended auction: creates the loan from the winning bid, mints positions, disburses the loan. Callable by anyone. |
 | `claimExpiredAuction(uint256 auctionId)` | Reclaim assets from an auction that ended but was never finalised. |
-| `repayLoan(uint256 loanId)` | Repay in full and reclaim collateral (borrower-position holder). Requires `approve` of the loan token for `repaymentAmount`. |
+| `repayLoan(uint256 loanId)` | Repay in full and reclaim collateral (borrower-position holder). Requires `approve` of the loan token for `repaymentAmount`. Transfers the repayment directly to the current lender-position holder, so it reverts if the loan token refuses that transfer (on USDC: [KI-3](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-3--repayment-reverts-if-the-loan-token-refuses-transfers-to-the-lender-position-holder)). |
 | `claimCollateral(uint256 loanId)` | Seize collateral on a defaulted loan (lender-position holder, after the grace period). |
 | `markDefault(uint256 loanId)` | Permissionlessly mark a past-grace loan as defaulted. Emits an event; transfers nothing. |
 

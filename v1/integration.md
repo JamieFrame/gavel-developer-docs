@@ -217,6 +217,7 @@ Common reverts to expect:
 - `MarketplaceFrozen` — within the maturity buffer; marketplace ops are paused for that loan.
 - `Unauthorized` — calling a `…For` function without operator approval.
 - `GracePeriodNotEnded` / `LoanNotMatured` — claiming collateral too early.
+- A loan-token revert on `repayLoan` (on USDC: `Blacklistable: account is blacklisted` or `Pausable: paused`) — USDC refuses the transfer to the current lender-position holder, or is paused; the loan cannot be repaid while it lasts. The holder is `PositionNFT.ownerOf(getLenderTokenId(loanId))`, and USDC exposes `isBlacklisted(address)`. See [KI-3](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-3--repayment-reverts-if-the-loan-token-refuses-transfers-to-the-lender-position-holder).
 
 ## Practical notes
 
