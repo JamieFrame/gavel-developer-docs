@@ -218,7 +218,7 @@ Common reverts to expect:
 - `Unauthorized` — calling a `…For` function without operator approval.
 - `GracePeriodNotEnded` / `LoanNotMatured` — claiming collateral too early.
 - A loan-token revert on `repayLoan` (on USDC: `Blacklistable: account is blacklisted` or `Pausable: paused`) — USDC refuses the transfer to the current lender-position holder, or is paused; the loan cannot be repaid while it lasts. The holder is `PositionNFT.ownerOf(getLenderTokenId(loanId))`, and USDC exposes `isBlacklisted(address)`. See [KI-3](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-3--repayment-reverts-if-the-loan-token-refuses-transfers-to-the-lender-position-holder).
-- `ERC721NonexistentToken(tokenId)` on `NFTLoanProtocol.repayLoan` or `claimCollateral` — the collateral NFT no longer exists. When the collateral is a Gavel position NFT, it was burned when its own loan settled, and this loan cannot settle by either route. See [KI-4](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-4--a-position-nft-used-as-collateral-is-burned-when-its-own-loan-settles).
+- `ERC721NonexistentToken(tokenId)` on `NFTLoanProtocol.repayLoan` or `claimCollateral` — the collateral NFT no longer exists. When the collateral is a Gavel position NFT, it was burned when its own loan settled, and this loan cannot settle by either route. Once anyone has called `markDefault` on this loan, its `repayLoan` reverts `LoanNotActive()` instead, and `claimCollateral` still reverts `ERC721NonexistentToken`. See [KI-4](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-4--a-position-nft-used-as-collateral-is-burned-when-its-own-loan-settles).
 
 ## Practical notes
 
