@@ -155,6 +155,8 @@ createAuction(
 
 `createAuctionFor` takes the same parameters plus the borrower/`collateralFrom` addresses, with the same operator-approval requirement.
 
+**Any ERC-721 is accepted, including the protocol's own position NFTs.** The only checks on `collateralNFT` are that it is non-zero and that the borrower owns the token. `repayLoan` and `claimCollateral` burn both position NFTs of the loan they settle, whoever holds them, so a `PositionNFT` or `NFTPositionNFT` pledged as collateral is burned when its own loan settles. The `NFTLoanProtocol` loan it secures then reverts on both `repayLoan` and `claimCollateral`; when the pledged position is a lender position, its own loan's repayment is sent to `NFTLoanProtocol`, where no function releases it. See [KI-4](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-4--a-position-nft-used-as-collateral-is-burned-when-its-own-loan-settles). The v1 contracts are immutable and cannot be patched.
+
 **Curation uses a collection whitelist.** `NFTListingService` whitelists collections rather than collateral tokens: `setCollectionWhitelist(collection, whitelisted)` (owner-only), with events `CollectionWhitelistUpdated`, `LoanTokenWhitelistUpdated`, and `CollectionInfoUpdated`. At launch no collection is whitelisted, so the curated NFT path is inactive until one is added; the direct core path remains open.
 
 **Position metadata.** `NFTPositionNFT` additionally caches a collateral image reference for richer position metadata. Its position-ID scheme, mint/burn/protocol-transfer access control, and pure helpers match `PositionNFT`.

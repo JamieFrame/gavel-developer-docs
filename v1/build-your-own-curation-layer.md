@@ -129,6 +129,8 @@ This is the architectural point worth internalising: a curation layer holds no s
 
 The same applies to NFT-collateralised lending. Build against `NFTLoanProtocol` instead, whitelist **collections** rather than tokens, and call `NFTLoanProtocol.createAuctionFor` with `(collateralNFT, collateralTokenId, …)`. The operator and custody guarantees are identical.
 
+`NFTLoanProtocol` accepts any ERC-721, including the protocol's own position NFTs, `PositionNFT` (`0xAD6Edb72409605a51dc6C990A09829616178A8f4`) and `NFTPositionNFT` (`0x9A1728C87ac0456cCd882b5D5637e856be0fEec8`). A position pledged as collateral is burned when its own loan settles, and the loan it secures can then never settle ([KI-4](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-4--a-position-nft-used-as-collateral-is-burned-when-its-own-loan-settles)). A collection whitelist can leave the two position contracts out.
+
 ## Next
 
 - [Frontend Guide](frontend.md) — putting a UI on your layer or on the core.
