@@ -48,7 +48,7 @@ Gavel's liens are built in the shape of secured credit:
 | Default, then enforcement | An obligation is breached only after its due date and a grace period fixed at creation; enforcement then follows by a rule anyone can trigger |
 | Application of proceeds | Every creditor in the set shares pro rata, by what each is owed at enforcement, and interest stops at that moment |
 
-The deployed Lien has one enforcement mode, TAKE: on breach the collateral passes **in kind** to the creditors. If the collateral holds enough of the loan's own currency to cover the debt, only what is owed is taken and the rest is kept for the borrower's side. Otherwise all of it passes, whatever it is worth, with no sale and no surplus returned. A lien that sells collateral and returns any surplus to the debtor is designed but not deployed.
+The deployed Lien has one enforcement mode, TAKE: on breach the collateral passes **in kind** to the creditors. If the collateral holds enough of the loan's own currency to cover the debt, only what is owed is taken and the rest is kept for the borrower's side. Otherwise all of it passes, whatever it is worth, with no sale and no surplus returned. The deployed Lien has no sale mode.
 
 The claim is narrow: the mechanical core of secured credit can be carried out by code that does what the law already sets out, so that the outcome on chain and the outcome a court would recognise can coincide. Where the law depends on judgement rather than mechanism, such as a stay in insolvency or the protections owed to consumers, the protocol does not pretend to supply it. That belongs to the legal agreements that refer to the on-chain record, and to the products built above the core.
 

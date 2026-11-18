@@ -69,7 +69,7 @@ A borrower asks for a loan of mUSDC against mWBTC, from one lender, through `Bul
    - The lender's principal moves to the borrower's free balance in the vault.
 5. **While it runs,** either side can sell: the lender sells claim units on `ClaimLotMarket`, and the borrower can sell the obligor position, with the collateral subject to the debt, on `ObligorPositionMarket`.
 6. **Repay.** The borrower, or anyone, pays the obligation, at the latest before the grace period ends. Paying early is allowed, but the full repayment is owed whenever it is paid. The claim holders collect what was paid. Anyone can then release the lien, and the collateral is credited for the obligor position's holder to claim.
-7. **Or breach.** If the obligation is still unpaid seven days after the due date (the product's grace period), anyone may call `markBreached`, and the set is breached. Until the lien is enforced, anyone may still pay the set off in full and return the collateral. Once anyone enforces it, the collateral passes in kind to the claim holders, shared by what each is owed.
+7. **Or breach.** If the obligation is still unpaid seven days after the due date (the product's grace period), anyone may call `markBreached`, and the set is breached. Until the lien is enforced, anyone may still pay the set off in full, which credits the collateral to the obligor position's holder to claim. Once anyone enforces it, the collateral passes in kind to the claim holders, shared by what each is owed.
 
 Each step is an ordinary call with a public rule. No step needs a price feed, a keeper with special rights, or anyone's permission. The same pattern, discovery on an engine and settlement on the core, runs every other product.
 
