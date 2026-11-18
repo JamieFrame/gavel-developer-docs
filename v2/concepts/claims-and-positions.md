@@ -7,7 +7,7 @@ Every set of obligations creates two kinds of token: one for the creditors' side
 | **Claim units** | ERC-1155, a fixed supply per id | Obligation (the id is the obligation id) | Is paid: a pro-rata share of everything credited to that obligation |
 | **Obligor position** | ERC-721 | Set (the token id is the set id) | Owes the set, may pay it, and receives any collateral returned from its lien |
 
-A bullet loan has one claim id, whose 1,000,000 units the lender holds, and one obligor position, which the borrower holds.
+A bullet loan from one lender has one claim id, whose 1,000,000 units the lender holds, and one obligor position, which the borrower holds. A loan from many lenders on one request splits the claim's units among them by what each lent; see [bullet loan](../products/bullet-loan.md).
 
 ## Claim units
 

@@ -16,7 +16,7 @@ Whatever is in the base layer therefore carries a guarantee, not just a label. A
 
 The rule on outside reads is kept by the author and checked through the disclosures; the chain cannot tell a rate index from a price feed, so the blocks cannot enforce it. Two current cases, stated plainly:
 
-- **Liquidation cover reads a price.** `MorphoCoverAdapter` reads the covered lending market's own oracle, the price that market liquidates by, to refuse cover on a position already too close to liquidation. The read is disclosed with each cover. See [liquidation cover](../products/liquidation-cover.md).
+- **Liquidation cover reads a price.** `MorphoCoverAdapter` reads the covered lending market's own oracle, the price that market liquidates by, to refuse cover on a position already too close to liquidation. Each cover names the lending market it reads when it is created; the oracle and rate model are fixed in the adapter it names, readable from its `ORACLE` and `IRM`. See [liquidation cover](../products/liquidation-cover.md).
 - **BOND is outside the base layer while its listing power lives** (below). It enters when the power ends.
 
 ## The four promises

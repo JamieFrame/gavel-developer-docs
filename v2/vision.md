@@ -26,7 +26,7 @@ Gavel is not a lending product with features around it. It is a minimal set of b
 - an **instalment loan** or a **note** is a schedule of obligations under one lien;
 - **insurance** is an underwriter's obligation that comes into force when someone else's loan is not repaid;
 - a **cash-settled future** is two obligations whose amounts are fixed from recorded spot prices, each secured by margin;
-- a **bill** is a token packaging insured claims that mature on the same date.
+- a **bill** is a token packaging insured claims that fall due in the same week.
 
 None of these needs a contract of its own at the bottom of the stack. Each is a thin product that arranges the same blocks, so each inherits their rules. The bullet loan, the cash-settled future, insurance and the insured bill, and liquidation cover are built this way on the testnet, beside the venues they trade on (the spot market and the secondary market) and BOND, which reads the record rather than writing to it. See the [concepts overview](concepts/overview.md).
 
