@@ -58,7 +58,7 @@ The vault, `ObligorPosition`, the engines, `SealedFront`, the resolvers and adap
 
 Two consequences to know:
 
-- **A new product needs the owner's admission** before it can reserve or lock users' balances, as well as each user's approval. A product that only reads the record, or that creates obligations and liens with its own funds, needs no admission.
+- **A new product needs the owner's admission** before it can reserve, lock or move balances in the vault, as well as the approval of each user whose balance it touches. That includes securing a loan with a lien, since handing a lock to the Lien needs admission. A product that only reads the record, or that creates unsecured obligations and pays from its own wallet, needs no admission.
 - **De-authorising, or pausing, a spot market near a reference time** can affect which clearings a cash-settled future counts. See [cash-settled future](../products/cash-settled-future.md).
 
 **One-shot wiring.** `ObligorPosition`'s link to Obligation was set once at deployment and cannot be changed. Everything else is named per set at creation: each set names its vault and lien contract, and they never change.
@@ -94,7 +94,7 @@ The superseded contracts listed on the [deployments](../deployments.md) page are
 
 - **any frontend, indexer, API or agent.** Every contract can be called and read directly; the outcome is the same whoever submits the transaction.
 - **keepers.** Anyone may clear a spot batch or finalise an auction; a keeper chooses nothing, and if no one acts, the only effect is delay.
-- **an operator you approve,** beyond its approval. An operator can act for you only where you approved it, and cannot redirect your funds: `withdrawFor`, for example, pays only you.
+- **an operator you approve,** beyond its approval. An operator acts for you only on the contracts where you approved it, and only through the functions that contract opens to operators. On the vault it cannot redirect your funds: `withdrawFor` pays only you. On some products it can do more, as far as your approval goes: on `CoverOrchestrator` it can move a policy's beneficiary to another address, and on the secondary market it can put your claim units or position up for sale. Each product's page says what its delegation covers.
 
 ## Next
 
