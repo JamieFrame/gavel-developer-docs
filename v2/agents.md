@@ -6,7 +6,7 @@ AI agents can work with Gavel V2 through an MCP (Model Context Protocol) server:
 |---|---|
 | Network | Gavel V2 on **Arbitrum Sepolia** (chain id 421614), not audited |
 | Tools | 37: 18 read, 19 write |
-| Endpoint | *Listed here when the testnet endpoint is live.* |
+| Endpoint | `https://mcp-testnet.thegavel.io/mcp` |
 
 **Nothing on the server signs or broadcasts a transaction, holds keys or takes custody of funds.** A write tool returns calldata; the user's wallet decides whether to sign it.
 
