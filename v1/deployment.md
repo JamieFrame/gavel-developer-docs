@@ -10,7 +10,7 @@ The Gavel Protocol is MIT-licensed and permissionless. This guide shows how to *
 
 ## The proxy model
 
-Each contract is an implementation deployed behind a minimal **ERC1967 proxy**. The implementations use OpenZeppelin's upgradeable base contracts, which means they use an `initialize(...)` function instead of a constructor — but they are **not** UUPS and there is **no proxy admin**, so once deployed the logic cannot be upgraded. This is deliberate: upgrades are done by deploying a new instance ("redeploy-as-v2"), never in place. If you deploy your own instance, it inherits the same immutability.
+Each contract is an implementation deployed behind a minimal **ERC1967 proxy**. The implementations use OpenZeppelin's upgradeable base contracts, which means they use an `initialize(...)` function instead of a constructor — but they are **not** UUPS, there is **no upgrade function** and there is **no proxy admin**, so once deployed the logic cannot change. This is deliberate: upgrades are done by deploying a new instance ("redeploy-as-v2"), never in place. If you deploy your own instance, it inherits the same immutability.
 
 ## Deploy order and the circular wiring
 
@@ -115,6 +115,6 @@ Explorers will then surface the proxy as a proxy and link it to the verified imp
 ## Notes
 
 - **Test on a testnet first.** The position↔core linkage is permanent; a mis-wired deployment cannot be fixed in place — you would redeploy.
-- **Immutability is a feature, not an oversight.** Don't add an upgrade mechanism expecting to match the reference; the design is non-upgradeable by intent.
+- **Immutability is a feature, not an oversight.** Don't add an upgrade mechanism expecting to match the reference; the design has no upgrade function and no proxy admin by intent.
 - **Decimals and bid steps** are per token — choose `minBidStep` appropriately (e.g. a 6-decimal stablecoin and an 18-decimal token need different floors).
 - For the canonical addresses and verified source, see the [protocol repo](https://github.com/JamieFrame/The-Gavel-Protocol).

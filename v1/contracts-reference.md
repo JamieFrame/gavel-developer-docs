@@ -8,7 +8,7 @@ The system is two parallel stacks. This reference documents the **ERC-20 stack**
 
 # LoanProtocol
 
-The core contract: collateral custody, auctions, the loan lifecycle, and the position marketplace. Permissionless and immutable; accepts any ERC-20.
+The core contract: collateral custody, auctions, the loan lifecycle, and the position marketplace. Permissionless and immutable (an ERC1967 proxy over a non-UUPS implementation, with no upgrade function and no proxy admin); accepts any ERC-20.
 
 ## Enums
 

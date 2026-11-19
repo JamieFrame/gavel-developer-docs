@@ -123,13 +123,13 @@ The operator model is the only fixed part; everything above it is yours:
 
 This is the architectural point worth internalising: a curation layer holds no special status. The core treats your layer exactly as it treats any operator — it can act only for users who approved it, only on their own deposited collateral, and only within the core's unchangeable rules. There can be many curation layers over one core at once, competing on selection, fees, and UX, all sharing the same immutable settlement and the same liquidity. Curating is permissionless; it is not a gatekeeping role granted by anyone.
 
-> **Note on v2.** This on-chain curation-layer pattern is a v1 feature. In v2 there is no on-chain curation contract at all — curation becomes a purely off-chain concern (a frontend plus an off-chain curated-asset list) over the same permissionless primitives, since the protocol takes no fees and an on-chain layer never actually restricts what a determined user can do. See the [v2 Roadmap](../vision/v2-roadmap.md). If you're building curation for v2, build a frontend and asset list, not a contract.
+> **Note on v2.** This on-chain curation-layer pattern is a v1 feature: v1's reference `ListingService` may take a fee. Gavel V2 has no curation contract, and its core takes no fee; curation there is a frontend and an asset list over the same permissionless contracts. Any application built above the V2 core may charge its own fee. See the [V2 vision](../v2/vision.md).
 
 ## NFT stack
 
 The same applies to NFT-collateralised lending. Build against `NFTLoanProtocol` instead, whitelist **collections** rather than tokens, and call `NFTLoanProtocol.createAuctionFor` with `(collateralNFT, collateralTokenId, …)`. The operator and custody guarantees are identical.
 
-`NFTLoanProtocol` accepts any ERC-721, including the protocol's own position NFTs, `PositionNFT` (`0xAD6Edb72409605a51dc6C990A09829616178A8f4`) and `NFTPositionNFT` (`0x9A1728C87ac0456cCd882b5D5637e856be0fEec8`). A position pledged as collateral is burned when its own loan settles, and the loan it secures can then never settle ([KI-4](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-4--a-position-nft-used-as-collateral-is-burned-when-its-own-loan-settles)). A collection whitelist can leave the two position contracts out.
+`NFTLoanProtocol` accepts any ERC-721, including the protocol's own position NFTs, `PositionNFT` and `NFTPositionNFT` (addresses in [Deployed Contracts](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/deployed-contracts.md)). A position pledged as collateral is burned when its own loan settles, and the loan it secures can then never settle ([KI-4](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/known-issues.md#ki-4--a-position-nft-used-as-collateral-is-burned-when-its-own-loan-settles)). A collection whitelist can leave the two position contracts out.
 
 ## Next
 

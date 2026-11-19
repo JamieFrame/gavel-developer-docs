@@ -10,7 +10,7 @@ The Gavel Protocol is a fixed-term, collateralised lending protocol with four de
 
 - **Oracle-free.** The protocol never asks an external price feed what collateral is worth. Interest rates are discovered by a competitive auction, and collateral is valued by the lenders who choose to bid. There is no price oracle to manipulate, and no oracle dependency to break.
 - **Permissionless.** The core contracts accept any ERC-20 (or, for the NFT stack, any ERC-721). There is no whitelist in the core. Anyone can create an auction, bid, or trade a position by calling the contracts directly.
-- **Immutable.** The deployed contracts are non-upgradeable. There is no proxy admin and no upgrade path; the logic cannot change after deployment. New functionality ships as new, separately deployed contracts (a "redeploy-as-v2" model), never as an in-place upgrade.
+- **Immutable.** The contracts are deployed behind ERC1967 proxies over non-UUPS implementations, with no upgrade function and no proxy admin, so the logic cannot change after deployment. New functionality ships as new, separately deployed contracts (a "redeploy-as-v2" model), never as an in-place upgrade.
 - **No liquidation.** Loans are fixed-term. There is no liquidation engine and no margin call. A loan runs to maturity; if it isn't repaid, the lender claims the collateral after a grace period.
 
 ## The layered model
@@ -99,7 +99,7 @@ This makes a borrower position mechanically similar to an option: a buyer of the
 
 ## Properties a builder can rely on
 
-- **Immutability.** Addresses and logic are fixed. Integrate against them with confidence that they will not change beneath you; new versions arrive at new addresses.
+- **Immutability.** Addresses and logic are fixed: ERC1967 proxies over non-UUPS implementations, with no upgrade function and no proxy admin. Integrate against them with confidence that they will not change beneath you; new versions arrive at new addresses.
 - **Any token.** The core imposes no token whitelist. If you build a curated experience, the whitelist is yours to define — it is not enforced by the core.
 - **No custody by intermediaries.** The operator model lets layers act for users without holding assets. A curation layer or router never takes custody; the core does, only for the duration of an auction or loan.
 - **Deterministic position identity.** The `loanId`-to-`tokenId` mapping is fixed arithmetic, so you can derive position token IDs without a lookup.
