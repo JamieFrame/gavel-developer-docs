@@ -227,7 +227,7 @@ Common reverts to expect:
 - **Finalisation is permissionless** — don't rely on a counterparty to finalise; your integration can call `finalizeAuction` itself.
 - **Refunds are pull-based** — outbid lenders must call `claimRefund`; it isn't pushed.
 - **`loanId == auctionId`** for the loan created from that auction.
-- **Immutability** — these addresses and behaviours won't change; new versions ship at new addresses.
+- **Immutability** — these addresses and behaviours won't change (ERC1967 proxies over non-UUPS implementations, with no upgrade function and no proxy admin); new versions ship at new addresses.
 
 ## Next
 

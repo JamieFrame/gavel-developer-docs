@@ -6,7 +6,7 @@ The [Aletheia API](aletheia-api.md) sits on top of this raw data and adds comput
 
 ## Reading state directly
 
-Every `view` function in the [Contract Reference](contracts-reference.md) is a free call. Point an RPC provider at the deployed [contract addresses](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/deployed-contracts.md) and read:
+Every `view` function in the [Contract Reference](../v1/contracts-reference.md) is a free call. Point an RPC provider at the deployed [contract addresses](https://github.com/JamieFrame/The-Gavel-Protocol/blob/main/docs/deployed-contracts.md) and read:
 
 ```js
 import { ethers } from "ethers";
@@ -29,7 +29,7 @@ Useful read functions: `getAuction`, `getLoan`, `getCurrentBid`, `getBidCount`, 
 
 ## Indexing via events
 
-For a historical record or a live feed, index the contract events rather than polling. The lifecycle events (full list in the [Contract Reference](contracts-reference.md)) are emitted for every state change:
+For a historical record or a live feed, index the contract events rather than polling. The lifecycle events (full list in the [Contract Reference](../v1/contracts-reference.md)) are emitted for every state change:
 
 - **Auctions:** `AuctionCreated`, `BidPlaced`, `AuctionFinalized`, `AuctionCancelled`, `AuctionExpiredNoBids`, `AuctionExpiredNotFinalized`.
 - **Loans:** `LoanRepaid`, `LoanDefaulted`, `LoanDefaultMarked`.
@@ -49,16 +49,16 @@ This is enough to build your own subgraph, dashboard, or analytics from first pr
 
 ## Programmatic access for AI agents (public MCP)
 
-The protocol also exposes its data through a public **MCP** (Model Context Protocol) server, so AI agents can read protocol state through tools rather than raw RPC:
+Aletheia Analytics SASU operates a public **MCP** (Model Context Protocol) server over Gavel data, so AI agents can work with protocol state through tools rather than raw RPC:
 
 ```
 https://mcp.thegavel.io
 ```
 
-It is **read-only**. The available tools cover the protocol's market data and reference state — for example, retrieving the yield curve, fetching protocol reference data, finding auctions matching criteria, and listing the available on-chain indicators — alongside a few helper tools (wallet readiness checks, compatible wallet options, fiat on-ramp suggestions). Connect any MCP-capable client to that URL to discover the current tool set and schemas.
+It has two kinds of tool. **Read tools** cover market data and reference state — for example, retrieving the yield curve, fetching protocol reference data, finding auctions matching criteria, and listing the available on-chain indicators — alongside a few helper tools (wallet readiness checks, compatible wallet options, fiat on-ramp suggestions). **Write tools** prepare transactions such as a bid, a repayment or a collateral claim and return them as **unsigned calldata**: nothing on the server signs, submits or broadcasts a transaction, and it holds no funds or keys. The caller's own wallet decides whether to sign. Connect any MCP-capable client to that URL to discover the current tool set and schemas.
 
 ## Which path to use
 
 - **Direct RPC reads / events** — source data, fully permissionless, you compute your own views. Free.
-- **Public MCP** — the same protocol data exposed as read tools for agents. Free, read-only.
+- **Public MCP** — protocol data as read tools for agents, plus tools that return unsigned calldata for the caller's wallet to sign. Operated by Aletheia Analytics SASU.
 - **[Aletheia API](aletheia-api.md)** — computed products (fitted curve, credit surface, indicators) ready to consume, so you don't index or compute them yourself.

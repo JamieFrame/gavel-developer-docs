@@ -13,7 +13,7 @@ Testnet:                    https://api-testnet.thegavel.io/v1
 
 ## Access and rate limits
 
-The API is currently **public and open** — no API key is required to call it. A tiered model is planned: a free tier available to everyone up to a request limit, with an upgraded API key for higher limits. Pricing is not yet finalised. Until then, please be considerate with request volume; once the tiered model is live, this page will document keys and limits.
+At November 2026 the API is **public and open** — no API key is required to call it. Please be considerate with request volume. If keys or limits are introduced, this page will document them.
 
 ## Conventions
 
@@ -59,7 +59,7 @@ Current-state listings and the full event log for borrower/lender position resal
 
 Prices are returned both raw (on-chain base units, as a string — `asking_price`, `sale_price`, `price`) and pre-formatted (`asking_price_formatted`, etc.) using the payment token's decimals, alongside `payment_token_symbol` and `payment_token_decimals`.
 
-> **Mainnet note.** The secondary marketplace is new on mainnet, so mainnet listings/history are currently **sparse** — these endpoints return well-formed empty results (`200` with empty arrays) there until activity accrues. The testnet base URL has live data.
+> **Empty results.** Where there is no marketplace activity to report, these endpoints return well-formed empty results (`200` with empty arrays) rather than an error. The testnet base URL has live data.
 
 ### Prices and market context
 
@@ -85,11 +85,11 @@ Each returns the current value; the `/history` variant returns the series. Defin
 
 ### Credit-complex indicators
 
-`GET /credit-complex` returns the batched set in one call; `GET /capital-stack` returns the capital-stack view. Individual indicators (with `/history` where applicable): `GET /lci`, `/vrb`, `/lpi`, `/drp`, `/sli`, `/sdr`, `/gls`, `/coc`, `/ccpi`.
+`GET /credit-complex` returns the batched set in one call; `GET /capital-stack` returns the capital-stack view. Individual indicators (with `/history` where applicable): `GET /lci`, `/vrb`, `/lpi`, `/drp`, `/sli`, `/sdr`, `/gls`, `/coc`, `/ccpi`, and `/credit/mrys` (with `/credit/mrys/history`).
 
 ### Bitcoin on-chain indicators
 
-`GET /onchain/hrcs` · `/mrys` · `/onchain/rpid` (each with `…/history`). UTXO-derived indicators: `GET /indicators/latest`, `GET /indicators/history`, and `GET /indicators/hodl-waves`.
+`GET /onchain/hrcs` · `/onchain/rpid` (each with `…/history`) are served from `https://api.bitcoincreditstack.com/v1`; the same paths under `https://api.thegavel.io/v1` redirect there. The UTXO-derived indicators are served from the same host as `GET /onchain/indicators/latest`, `GET /onchain/indicators/history` and `GET /onchain/indicators/hodl-waves`; the older `/indicators/…` paths under `https://api.thegavel.io/v1` redirect to them.
 
 ## Examples
 
