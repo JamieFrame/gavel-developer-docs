@@ -89,7 +89,7 @@ Each returns the current value; the `/history` variant returns the series. Defin
 
 ### Bitcoin on-chain indicators
 
-`GET /onchain/hrcs` · `/onchain/rpid` (each with `…/history`). UTXO-derived indicators: `GET /indicators/latest`, `GET /indicators/history`, and `GET /indicators/hodl-waves`.
+`GET /onchain/hrcs` · `/onchain/rpid` (each with `…/history`) are served from `https://api.bitcoincreditstack.com/v1`; the same paths under `https://api.thegavel.io/v1` redirect there. The UTXO-derived indicators are served from the same host as `GET /onchain/indicators/latest`, `GET /onchain/indicators/history` and `GET /onchain/indicators/hodl-waves`; the older `/indicators/…` paths under `https://api.thegavel.io/v1` redirect to them.
 
 ## Examples
 
