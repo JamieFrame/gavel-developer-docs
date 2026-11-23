@@ -131,10 +131,10 @@ Many records also carry their own `ownAccount` flag: the API's annotation markin
 Other conventions:
 
 - **Integers are decimal strings.** Times (`at`) are unix seconds.
-- **Lists are newest first**, except `/logs`, which is ascending like `eth_getLogs`; `/calendar`, ascending by date; and `/calendar/futures-offers`, ascending by reference time.
-- **List size:** on routes that take `limit`, it defaults to 50 and is capped at 500 (on `/logs`, 1,000 and 5,000). `/calendar`, `/calendar/futures-offers`, `/bills/:k/backing`, `/bills/:k/policies`, `/accounts/:address/held-units`, `/accounts/:address/bond`, `/accounts/:address/balances`, `/bond/listing`, `/bills/series` and `/deployment` return everything they match.
+- **Lists are newest first**, except `/logs`, which is ascending like `eth_getLogs`; `/calendar`, ascending by date; `/calendar/futures-offers`, ascending by reference time; `/bullet-loans/due`, ascending by due date; and `/tape/daily`, oldest day first.
+- **List size:** on routes that take `limit`, it defaults to 50 and is capped at 500 (on `/logs`, 1,000 and 5,000). `/calendar`, `/calendar/futures-offers`, `/bills/:k/backing`, `/bills/:k/policies`, `/accounts/:address/held-units`, `/accounts/:address/bond`, `/accounts/:address/balances`, `/bond/listing`, `/bills/series`, `/bullet-loans/due`, `/tape/breaches`, `/tape/daily` and `/deployment` return everything they match.
 - **`product`** filters (on `/tape` and `/auctions`) take `bullet-loan`, `spot`, `bills`, `secondary`, `future`, `protection`, `liquidation` or `bond`.
-- **Paging:** routes that page return `next`; pass it back as `cursor`. It is `"block:logIndex"` on most routes, a slot number on `/spot/:market/batches` and `"block:ref"` on `/bullet-loans/originations`. `next` is `null` on the last page.
+- **Paging:** routes that page return `next`; pass it back as `cursor`. It is `"block:logIndex"` on most routes, a slot number on `/spot/:market/batches`, `"block:ref"` on `/bullet-loans/originations` and `"block:policyId"` on `/protection/policies`. `next` is `null` on the last page.
 - **Where a value comes from.** A value computed from indexed events and a value read from a contract at `indexedTo` are both "as at `indexedTo`". Where an answer mixes the two, its `sources` names, per field, which it is (for example `"payoff": "chain:Obligation.payoff@indexedTo"`), and its `notes` say what each field means. A value the API could not read is `null`, and is listed in `unavailable` with a reason.
 - **Errors** are a non-2xx status with `{ "error": { "code", "message" } }`, such as `invalid_address` (400) or `not_indexed` (404).
 - Answers may be cached for up to 30 seconds; each still carries its own `indexedTo`.
@@ -167,24 +167,27 @@ Testnet-only and subject to change. Paths are relative to the base URL.
 | `/logs` | Logs for one contract and event, in `eth_getLogs` shape (above) | `address`, `event`, `topics`, `fromBlock`, `toBlock`, `limit`, `cursor` |
 | `/events` | Decoded events (`args`) for one contract and event, newest first | `contract`, `event`, `fromBlock`, `toBlock`, `t1`–`t3` (match any field equal to the value), `limit`, `cursor` |
 | `/tape` | One entry per user action across the products (`kind`, `product`, `contract` and `contractAddress`, `status` of that contract (`current` or `superseded`), `market` for spot markets, the acting `address`, `ids`, block and transaction) | `since` (unix time, within 90 days; default 7 days), `product`, `kind`, `limit`, `cursor` |
-| `/auctions` | Product auctions, open or closed. Closed ones carry the clearing rate, bid quantity, distinct bidders, status, and `isPrice` with `notPriceReason` (a posted-offer take, or a clearing later expired, is not a price) | `state` (`open` or `closed`), `product`, `limit` |
+| `/tape/breaches` | Each obligation breached in the window: obligation and set ids, product, time, the acting address, the lien, whether and when the lien was enforced, and whether a loan-protection policy names the obligation | `from` and `to`, or `asOf` with `window` (`7d`, the default, or `24h`); within 90 days |
+| `/tape/daily` | Actions per UTC day and product, from the tape: the number of actions and of distinct addresses. A day the indexer has not yet passed is marked `partial` | `days` (1 to 90; default 7) |
+| `/auctions` | Product auctions, open or closed, to `indexedTo`, with the loan token, the collateral locked, the opener's limit, and for a loan the live `end` (which moves with a pause) beside the `endAnnounced` when it opened. Closed ones carry the clearing rate, bid quantity, distinct bidders, status, and `isPrice` with `notPriceReason` (a posted-offer take, or a clearing later expired, is not a price) | `state` (`open` or `closed`), `product`, `limit` |
 | `/auctions/:engine/:auctionId/bids` | Every bid on one engine auction | |
 | `/curve` | Bullet-loan clearing rates with their terms and set ids, and the latest clearing of each bill series' market, with the number of points, their time span and distinct counterparties | |
 | `/bullet-loans/opened` | Bullet loans, with each origination's `ref`, `setId` and `lienId` | `opener`, `limit` |
 | `/bullet-loans/entries` | Bids and takes recorded on bullet loans | `owner`, `limit` |
+| `/bullet-loans/due` | Bullet loans not yet over, by due date: `dueAt`, the due date adjusted for any pause, `breachableAt` (the time from which a breach can be marked), the obligation's status and the loan's state | `from` and `to` (bound `dueAt`), `all=1` (include loans already over) |
 | `/bullet-loans/originations` | One row per origination: side, loan id, `ref`, set and obligation ids, loan token, collateral, principal, repayment, term, clearing rate, settled time, `dueAt`, the obligation's status and the number of counterparties, with `isPrice` as on `/auctions` | `contract`, `status`, `since`, `limit`, `cursor` |
 | `/spot/:market/batches` | A spot market's slots: clearing price, matched and settled volume, low-volume flag, when the clearing was found and settled, fills, orders placed; the open slot carries `clearableAt` | `cleared=1`, `since`, `limit`, `cursor` |
 | `/spot/:market/last` | The market's latest cleared slot, however old, and the number of cleared slots | |
 | `/spot/last` | The same for several markets at once | `markets` (comma-separated addresses, up to 32) |
-| `/protection/offers` | Cover offers and their terms | `open=1`, `adapter`, `limit` |
-| `/protection/policies` | Cover policies | `account`, `role` (`insured`, `beneficiary`, `seller`), `limit` |
+| `/protection/offers` | Cover offers and their terms, with each offer's `remaining` and `status` as at `indexedTo` | `open=1`, `adapter`, `limit` |
+| `/protection/policies` | Cover policies, with the end of each one's cover window (`windowEnd`) | `account`, `role` (`insured`, `beneficiary`, `seller`), `ids` (up to 100), `limit`, `cursor` |
 | `/bills/:k/backing` | The bill packager's events for series `k` | |
 | `/bills/:k/policies` | The policies deposited into series `k` | |
-| `/bills/series` | Opened bill series: token, date, the time it opened, its market, and its open, face and supply figures | |
-| `/calendar` | Dates ahead: loans due, futures' reference times, cover windows ending | `from`, `to` (default: now to 90 days) |
+| `/bills/series` | Bill series: token, date, the time it opened, its market, and its open, face and supply figures; a series not yet opened carries `openable`, whether it can still be opened | |
+| `/calendar` | Dates ahead: loans due, futures' reference times, cover offers' windows ending, protection policies ending, bill dates | `from`, `to` (default: now to 90 days) |
 | `/calendar/futures-offers` | Future offers grouped by reference time | |
 | `/futures` | Opened futures, with both legs' set and obligation ids | `account`, `limit` |
-| `/secondary/sales` | Claim-lot and obligor-position sales | `market`, `state`, `limit` |
+| `/secondary/sales` | Claim-lot and obligor-position sales | `market`, `state`, `seller`, `limit` |
 | `/secondary/:market/:auctionId/bids` | One sale's bids and escrow events | |
 | `/accounts/:address/holdings` | Claim units held (including units escrowed in an open sale) and obligor positions | |
 | `/accounts/:address/vault-events` | The account's vault events | `limit` |
